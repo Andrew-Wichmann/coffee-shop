@@ -1,0 +1,20 @@
+logging:
+  level: "debug"
+  development: true # Use development mode (human-readable logs)
+  encoding: "console"
+  outputPaths:
+    - "stdout"
+  errorOutputPaths:
+    - "stderr"
+  encoderConfig:
+    messageKey: "message"
+    levelKey: "level"
+    timeKey: "time"
+    nameKey: "logger"
+    callerKey: "caller"
+    stacktraceKey: "stacktrace"
+    lineEnding: ""
+    levelEncoder: "capitalColor"
+    timeEncoder: "iso8601"
+    durationEncoder: "string"
+    callerEncoder: "short"
