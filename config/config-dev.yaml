@@ -2,6 +2,9 @@ logging:
   level: "debug"
   development: true # Use development mode (human-readable logs)
   encoding: "console"
+  disableStacktrace: false
+  initialFields:
+    app: coffee-shop
   outputPaths:
     - "stdout"
   errorOutputPaths:

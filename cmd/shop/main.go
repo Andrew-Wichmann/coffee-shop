@@ -26,5 +26,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	logger.Debug("Hello world!")
 	logger.Info("Hello world!")
+	logger.Warn("Hello world!")
+	logger.Error("Hello world!")
 }
