@@ -8,11 +8,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type LoggingConfig struct {
-	Encoding string `mapstructure:"encoding"`
-	Level    string `mapstructure:"level"`
-}
-
 func main() {
 	configFile := flag.String("config", "config.yaml", "Path to the configuration file.")
 	flag.Parse()
