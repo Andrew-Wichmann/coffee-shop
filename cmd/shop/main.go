@@ -5,9 +5,8 @@ import (
 )
 
 func main() {
-	logger := logging.GetLogger()
-	logger.Debug("Hello world!")
-	logger.Info("Hello world!")
-	logger.Warn("Hello world!")
-	logger.Error("Hello world!")
+	logging.Logger.Debug("Hello world!")
+	logging.Logger.Info("Hello world!")
+	logging.Logger.Warn("Hello world!")
+	logging.Logger.Error("Hello world!")
 }

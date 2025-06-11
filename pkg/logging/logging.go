@@ -8,7 +8,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var logger *zap.Logger
+var Logger *zap.Logger
 
 func init() {
 	loggingConfig := viper.GetStringMap("logging")
@@ -17,12 +17,8 @@ func init() {
 	if err := json.Unmarshal(jsonData, &cfg); err != nil {
 		panic(err)
 	}
-	logger, err = cfg.Build()
+	Logger, err = cfg.Build()
 	if err != nil {
 		panic(err)
 	}
-}
-
-func GetLogger() *zap.Logger {
-	return logger
 }
