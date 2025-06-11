@@ -18,6 +18,6 @@ logging:
     stacktraceKey: "stacktrace"
     lineEnding: ""
     levelEncoder: "capitalColor"
-    timeEncoder: "iso8601"
+    timeEncoder: "rfc3339"
     durationEncoder: "string"
     callerEncoder: "short"
