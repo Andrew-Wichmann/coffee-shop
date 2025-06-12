@@ -27,27 +27,41 @@ func websocketHandler(rw http.ResponseWriter, req *http.Request) {
 	defer conn.Close()
 	logging.Logger.Debug("Connection established")
 
-	message := ""
-	for message != "hello" {
+	for {
 		_, _message, err := conn.ReadMessage()
 		if err != nil {
 			logging.Logger.Error("Error reading message", zap.Error(err))
 			return
 		}
-		message = string(_message)
+		message := string(_message)
 		logging.Logger.Debug("Received message", zap.String("message_received", message))
+		var response string
+		switch message {
+		case "enter":
+			response = "Welcome"
+		case "leave":
+			response = "Thank you for visiting!"
+		default:
+			response = "Unknown action."
+		}
+
+		logging.Logger.Debug("Sending response", zap.String("response sent", response))
+		err = conn.WriteMessage(websocket.TextMessage, []byte(response))
+		if err != nil {
+			logging.Logger.Error("Could not send 'world' response", zap.Error(err))
+			return
+		}
+
+		if message == "leave" {
+			err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Goodbye"))
+			if err != nil {
+				logging.Logger.Error("Could not send the close websocket message")
+				return
+			}
+			logging.Logger.Info("Connection closed gracefully")
+			return
+		}
 	}
-	err = conn.WriteMessage(websocket.TextMessage, []byte("world"))
-	if err != nil {
-		logging.Logger.Error("Could not send 'world' response", zap.Error(err))
-		return
-	}
-	err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Goodbye"))
-	if err != nil {
-		logging.Logger.Error("Could not send the close websocket message")
-		return
-	}
-	logging.Logger.Info("Connection closed gracefully")
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {
