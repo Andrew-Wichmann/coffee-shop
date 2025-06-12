@@ -38,7 +38,13 @@ func websocketHandler(rw http.ResponseWriter, req *http.Request) {
 		var response string
 		switch message {
 		case "enter":
-			response = "Welcome"
+			response = "Welcome. There are X people in line. Would you like to stand in line?"
+		case "queue":
+			response = "You're place in line is N/X."
+		case "order":
+			response = "You ordered a coffee."
+		case "sit":
+			response = "You are sitting."
 		case "leave":
 			response = "Thank you for visiting!"
 		default:
