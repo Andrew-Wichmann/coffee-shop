@@ -3,6 +3,7 @@ module github.com/Andrew-Wichmann/coffee-shop
 go 1.23.3
 
 require (
+	github.com/gorilla/websocket v1.5.3
 	github.com/spf13/viper v1.20.1
 	go.uber.org/zap v1.27.0
 )

@@ -5,8 +5,50 @@ import (
 	"time"
 
 	"github.com/Andrew-Wichmann/coffee-shop/pkg/logging"
+	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		// Allow all origins
+		return true
+	},
+}
+
+func websocketHandler(rw http.ResponseWriter, req *http.Request) {
+	conn, err := upgrader.Upgrade(rw, req, nil)
+	if err != nil {
+		logging.Logger.Error("Could not upgrade the connection to a websocket", zap.Error(err))
+		return
+	}
+	defer conn.Close()
+	logging.Logger.Debug("Connection established")
+
+	message := ""
+	for message != "hello" {
+		_, _message, err := conn.ReadMessage()
+		if err != nil {
+			logging.Logger.Error("Error reading message", zap.Error(err))
+			return
+		}
+		message = string(_message)
+		logging.Logger.Debug("Received message", zap.String("message_received", message))
+	}
+	err = conn.WriteMessage(websocket.TextMessage, []byte("world"))
+	if err != nil {
+		logging.Logger.Error("Could not send 'world' response", zap.Error(err))
+		return
+	}
+	err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Goodbye"))
+	if err != nil {
+		logging.Logger.Error("Could not send the close websocket message")
+		return
+	}
+	logging.Logger.Info("Connection closed gracefully")
+}
 
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -29,6 +71,7 @@ func rootHandler(rw http.ResponseWriter, req *http.Request) {
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", rootHandler)
+	mux.HandleFunc("/ws", websocketHandler)
 	logging.Logger.Info("Starting server!")
 	http.ListenAndServe(":8080", loggingMiddleware(mux))
 }
