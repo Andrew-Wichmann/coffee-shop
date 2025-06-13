@@ -1,9 +1,14 @@
 package main
 
 import (
-	"net/http"
-	"time"
+	"context"
 	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/Andrew-Wichmann/coffee-shop/pkg/logging"
 	"github.com/Andrew-Wichmann/coffee-shop/pkg/models"
@@ -20,7 +25,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-type customer struct{
+type customer struct {
 	coffee models.Coffee
 	ticket models.Ticket
 }
@@ -133,14 +138,47 @@ func rootHandler(rw http.ResponseWriter, req *http.Request) {
 
 func main() {
 	logging.Logger.Info("Opening the store!")
-	go models.CoffeeStore.Open()
-
+	models.CoffeeStore.Open()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", rootHandler)
 	mux.HandleFunc("/ws", websocketHandler)
 	logging.Logger.Info("Starting server!")
-	err := http.ListenAndServe(":8080", loggingMiddleware(mux))
-	if err != nil {
-		logging.Logger.Error("Error starting the server", zap.Error(err))
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	server := http.Server{
+		Addr:    ":8080",
+		Handler: loggingMiddleware(mux),
 	}
+	go func() {
+		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+			logging.Logger.Panic("Server exited unexpectedly", zap.Error(err))
+		}
+	}()
+	<-stop
+
+	logging.Logger.Info("Shutting down the server...")
+
+	// According to Chat-Gipity, typical Kubernetes deployments five 30 seconds
+	// for the server to shut down.
+	var wg sync.WaitGroup
+	wg.Add(2)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	go func() {
+		defer wg.Done()
+
+		if err := server.Shutdown(ctx); err != nil {
+			logging.Logger.Error("Server forced to shutdown", zap.Error(err))
+		} else {
+			logging.Logger.Info("Server shutdown gracefully")
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		models.CoffeeStore.Close(ctx)
+	}()
+
+	wg.Wait()
+	logging.Logger.Info("Everything shutdown. Exiting.")
 }

@@ -1,6 +1,8 @@
 package models
 
 import (
+	"context"
+	"sync"
 	"time"
 
 	"github.com/Andrew-Wichmann/coffee-shop/pkg/logging"
@@ -15,7 +17,7 @@ var CoffeeStore Store
 
 type Store interface {
 	Open()
-	Close()
+	Close(context.Context)
 	TakeTicket(onTicketCalled func() error) (Ticket, error)
 	CheckTicket(Ticket) (int, error)
 	OrderCoffee(CoffeeType) (Coffee, error)
@@ -27,7 +29,8 @@ type Store interface {
 type inMemoryStore struct {
 	Profit  DollarAmount
 	tickets []Ticket // Should almost certainly be mutexed
-	open    bool
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
 	// TODO:
 	// tables
 	// registers
@@ -66,23 +69,43 @@ func (s inMemoryStore) NowServing() (Ticket, error) {
 }
 
 func (s *inMemoryStore) Open() {
-	s.open = true
-	for s.open {
-		time.Sleep(5 * time.Second)
-		logging.Logger.Debug("Checking tickets", zap.Int("ticket_count", len(s.tickets)))
-		if len(s.tickets) > 0 {
-			ticket := s.tickets[0]
-			err := ticket.Call()
-			if err != nil {
-				logging.Logger.Error("Error calling ticket. Maybe we should consider kicking that customer out?", zap.Error(err))
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				logging.Logger.Debug("Checking tickets", zap.Int("ticket_count", len(s.tickets)))
+				if len(s.tickets) > 0 {
+					ticket := s.tickets[0]
+					err := ticket.Call()
+					if err != nil {
+						logging.Logger.Error("Error calling ticket. Maybe we should consider kicking that customer out?", zap.Error(err))
+					}
+					s.tickets = s.tickets[1:]
+				}
 			}
-			s.tickets = s.tickets[1:]
+			time.Sleep(5 * time.Second)
 		}
-	}
-	logging.Logger.Info("Shop closed")
+	}()
 }
 
-func (s *inMemoryStore) Close() {
-	logging.Logger.Info("Closing shop")
-	s.open = false
+func (s *inMemoryStore) Close(ctx context.Context) {
+	logging.Logger.Info("Closing up shop")
+	s.cancel()
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		logging.Logger.Info("Shop closed gracefully")
+	case <-ctx.Done():
+		logging.Logger.Error("Shop could not close gracefully. Forced to move on.")
+	}
 }
