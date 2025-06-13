@@ -3,8 +3,10 @@ package main
 import (
 	"net/http"
 	"time"
+	"fmt"
 
 	"github.com/Andrew-Wichmann/coffee-shop/pkg/logging"
+	"github.com/Andrew-Wichmann/coffee-shop/pkg/models"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
@@ -18,6 +20,29 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+type customer struct{
+	coffee models.Coffee
+	ticket models.Ticket
+}
+
+func (c *customer) orderCoffee() error {
+	coffee, err := models.CoffeeStore.OrderCoffee(models.HOUSE)
+	if err != nil {
+		return err
+	}
+	c.coffee = coffee
+	return nil
+}
+
+func (c *customer) drinkCoffee() (string, error) {
+	if c.coffee == nil {
+		return "You have no coffee to drink!", nil
+	}
+	response := fmt.Sprintf("You enjoy your %s", c.coffee.Name())
+	c.coffee = nil
+	return response, nil
+}
+
 func websocketHandler(rw http.ResponseWriter, req *http.Request) {
 	conn, err := upgrader.Upgrade(rw, req, nil)
 	if err != nil {
@@ -26,7 +51,7 @@ func websocketHandler(rw http.ResponseWriter, req *http.Request) {
 	}
 	defer conn.Close()
 	logging.Logger.Debug("Connection established")
-
+	var customer customer
 	for {
 		_, _message, err := conn.ReadMessage()
 		if err != nil {
@@ -39,8 +64,15 @@ func websocketHandler(rw http.ResponseWriter, req *http.Request) {
 		switch message {
 		case "enter":
 			response = "Welcome. There are X people in line. Would you like to stand in line?"
-		case "queue":
-			response = "You're place in line is N/X."
+		case "take ticket":
+			var ticket models.Ticket
+			ticket, err = models.CoffeeStore.TakeTicket(customer.orderCoffee)
+			customer.ticket = ticket
+			response = "Ticket taken"
+		case "drink coffee":
+			response, err = customer.drinkCoffee()
+		case "check ticket":
+			response = "checking ticket"
 		case "order":
 			response = "You ordered a coffee."
 		case "sit":
@@ -49,6 +81,17 @@ func websocketHandler(rw http.ResponseWriter, req *http.Request) {
 			response = "Thank you for visiting!"
 		default:
 			response = "Unknown action."
+		}
+
+		if err != nil {
+			logging.Logger.Info("Something went wrong with this customer. We're kicking them out and closing the door/connection", zap.Error(err))
+			err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Goodbye"))
+			if err != nil {
+				logging.Logger.Error("Could not send the close websocket message")
+				return
+			}
+			logging.Logger.Info("Connection closed gracefully")
+			return
 		}
 
 		logging.Logger.Debug("Sending response", zap.String("response sent", response))
@@ -89,9 +132,15 @@ func rootHandler(rw http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
+	logging.Logger.Info("Opening the store!")
+	go models.CoffeeStore.Open()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", rootHandler)
 	mux.HandleFunc("/ws", websocketHandler)
 	logging.Logger.Info("Starting server!")
-	http.ListenAndServe(":8080", loggingMiddleware(mux))
+	err := http.ListenAndServe(":8080", loggingMiddleware(mux))
+	if err != nil {
+		logging.Logger.Error("Error starting the server", zap.Error(err))
+	}
 }
