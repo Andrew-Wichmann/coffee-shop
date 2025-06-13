@@ -74,11 +74,13 @@ func (s *inMemoryStore) Open() {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			default:
+			case <-ticker.C:
 				logging.Logger.Debug("Checking tickets", zap.Int("ticket_count", len(s.tickets)))
 				if len(s.tickets) > 0 {
 					ticket := s.tickets[0]
@@ -89,7 +91,6 @@ func (s *inMemoryStore) Open() {
 					s.tickets = s.tickets[1:]
 				}
 			}
-			time.Sleep(5 * time.Second)
 		}
 	}()
 }
