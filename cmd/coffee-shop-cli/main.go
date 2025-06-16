@@ -1,24 +1,35 @@
 package main
 
 import (
-	"io"
 	"log"
-	"net/http"
 
 	_ "github.com/charmbracelet/bubbles"
 	tea "github.com/charmbracelet/bubbletea"
 	_ "github.com/charmbracelet/lipgloss"
+	"github.com/gorilla/websocket"
 )
 
 type app struct {
 	response string
 }
 
+var conn *websocket.Conn
+
 type requestError error
 type requestResp string
 
-func (a app) Init() tea.Cmd {
+func createConnection() tea.Msg {
+	log.Println("Connecting to websocket")
+	var err error
+	conn, _, err = websocket.DefaultDialer.Dial("ws://localhost:8080/ws", nil)
+	if err != nil {
+		return requestError(err)
+	}
 	return nil
+}
+
+func (a app) Init() tea.Cmd {
+	return createConnection
 }
 
 func (a app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -47,18 +58,16 @@ func (a app) View() string {
 }
 
 func sendRequest() tea.Msg {
-	log.Println("sending http request")
-	resp, err := http.Get("http://localhost:8080/healthcheck")
+	err := conn.WriteMessage(websocket.TextMessage, []byte("enter"))
 	if err != nil {
 		return requestError(err)
 	}
-	defer resp.Body.Close()
-	buf := make([]byte, 1000)
-	_, err = resp.Body.Read(buf)
-	if err != io.EOF {
+	_, _msg, err := conn.ReadMessage()
+	if err != nil {
 		return requestError(err)
 	}
-	return requestResp(buf)
+	log.Println(string(_msg))
+	return requestResp(_msg)
 }
 
 func main() {
