@@ -81,7 +81,6 @@ func (s *inMemoryStore) Open() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				logging.Logger.Debug("Checking tickets", zap.Int("ticket_count", len(s.tickets)))
 				if len(s.tickets) > 0 {
 					ticket := s.tickets[0]
 					err := ticket.Call()

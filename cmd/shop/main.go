@@ -133,7 +133,11 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 func rootHandler(rw http.ResponseWriter, req *http.Request) {
 	rw.WriteHeader(200)
-	rw.Write([]byte("Hello world"))
+}
+
+func healthCheckHandler(rw http.ResponseWriter, req *http.Request) {
+	rw.WriteHeader(200)
+	rw.Write([]byte("OK"))
 }
 
 func main() {
@@ -142,6 +146,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", rootHandler)
 	mux.HandleFunc("/ws", websocketHandler)
+	mux.HandleFunc("/healthcheck", healthCheckHandler)
 	logging.Logger.Info("Starting server!")
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
