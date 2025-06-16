@@ -1,14 +1,13 @@
 package config
 
 import (
-	"flag"
-
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
 func init() {
-	configFile := flag.String("config", "config.yaml", "Path to the configuration file.")
-	flag.Parse()
+	configFile := pflag.String("config", "config.yaml", "Path to the configuration file.")
+	pflag.Parse()
 	viper.SetConfigFile(*configFile)
 	err := viper.ReadInConfig()
 	if err != nil {
