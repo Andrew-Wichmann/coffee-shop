@@ -19,18 +19,20 @@ type Store interface {
 	Open()
 	Close(context.Context)
 	TakeTicket(onTicketCalled func() error) (Ticket, error)
-	CheckTicket(Ticket) (int, error)
 	OrderCoffee(CoffeeType) (Coffee, error)
-	NowServing() (Ticket, error)
+	CustomersWaitingToBeServed() (int, error)
+	NowServing() (int, error)
 	// Sit() error
 	// Shit() error
 }
 
 type inMemoryStore struct {
-	Profit  DollarAmount
-	tickets []Ticket // Should almost certainly be mutexed
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
+	Profit      DollarAmount
+	tickets     []Ticket // Should almost certainly be mutexed
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	nowServing  int
+	totalServed int
 	// TODO:
 	// tables
 	// registers
@@ -43,29 +45,19 @@ type inMemoryStore struct {
 }
 
 func (s *inMemoryStore) TakeTicket(onTicketCalled func() error) (Ticket, error) {
-	ticket := inMemoryTicket{onCall: onTicketCalled}
+	ticket := inMemoryTicket{onCall: onTicketCalled, number: s.totalServed + 1}
 	logging.Logger.Debug("Ticket taken", zap.Int("ticket_number", ticket.Number()))
 	s.tickets = append(s.tickets, ticket)
-	return inMemoryTicket{}, nil
-}
-
-func (s inMemoryStore) CheckTicket(ticket Ticket) (int, error) {
-	now_serving, err := s.NowServing()
-	if err != nil {
-		return 0, err
-	}
-	return ticket.Number() - now_serving.Number(), nil
+	s.totalServed += 1
+	return ticket, nil
 }
 
 func (s inMemoryStore) OrderCoffee(coffeeType CoffeeType) (Coffee, error) {
 	return HouseCoffee{}, nil
 }
 
-func (s inMemoryStore) NowServing() (Ticket, error) {
-	if len(s.tickets) == 0 {
-		return nil, nil
-	}
-	return s.tickets[0], nil
+func (s inMemoryStore) NowServing() (int, error) {
+	return s.nowServing, nil
 }
 
 func (s *inMemoryStore) Open() {
@@ -74,7 +66,7 @@ func (s *inMemoryStore) Open() {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		ticker := time.NewTicker(50 * time.Millisecond)
+		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
@@ -83,6 +75,7 @@ func (s *inMemoryStore) Open() {
 			case <-ticker.C:
 				if len(s.tickets) > 0 {
 					ticket := s.tickets[0]
+					s.nowServing = ticket.Number()
 					err := ticket.Call()
 					if err != nil {
 						logging.Logger.Error("Error calling ticket. Maybe we should consider kicking that customer out?", zap.Error(err))
@@ -108,4 +101,8 @@ func (s *inMemoryStore) Close(ctx context.Context) {
 	case <-ctx.Done():
 		logging.Logger.Error("Shop could not close gracefully. Forced to move on.")
 	}
+}
+
+func (s *inMemoryStore) CustomersWaitingToBeServed() (int, error) {
+	return len(s.tickets), nil
 }

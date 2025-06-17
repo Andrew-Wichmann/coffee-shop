@@ -31,11 +31,14 @@ type customer struct {
 }
 
 func (c *customer) orderCoffee() error {
+	logging.Logger.Debug("Customer is thinking")
+	time.Sleep(10 * time.Second)
 	coffee, err := models.CoffeeStore.OrderCoffee(models.HOUSE)
 	if err != nil {
 		return err
 	}
 	c.coffee = coffee
+	c.ticket = nil
 	return nil
 }
 
@@ -68,16 +71,24 @@ func websocketHandler(rw http.ResponseWriter, req *http.Request) {
 		var response string
 		switch message {
 		case "enter":
-			response = "Welcome. There are X people in line. Would you like to stand in line?"
+			var line_length int
+			line_length, err = models.CoffeeStore.CustomersWaitingToBeServed()
+			response = fmt.Sprintf("Welcome. There are %d people waiting to be served. Would you like to take a ticket?", line_length)
 		case "take ticket":
 			var ticket models.Ticket
 			ticket, err = models.CoffeeStore.TakeTicket(customer.orderCoffee)
 			customer.ticket = ticket
-			response = "Ticket taken"
+			response = fmt.Sprintf("Ticket taken: number %d", customer.ticket.Number())
 		case "drink coffee":
 			response, err = customer.drinkCoffee()
 		case "check ticket":
-			response = "checking ticket"
+			if customer.ticket == nil {
+				response = "You don't have a ticket you silly cow"
+			} else {
+				var now_serving int
+				now_serving, err = models.CoffeeStore.NowServing()
+				response = fmt.Sprintf("Now serving: %d. You will be served after %d customers", now_serving, customer.ticket.Number()-now_serving)
+			}
 		case "order":
 			response = "You ordered a coffee."
 		case "sit":
