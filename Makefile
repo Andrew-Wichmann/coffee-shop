@@ -1,5 +1,6 @@
 build: shop
 
+.PHONY: shop
 shop:
 	go build ./cmd/shop
 
