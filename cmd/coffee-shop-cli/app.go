@@ -11,12 +11,23 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type size int
+
+const (
+	TOO_SMALL = iota
+	MEDIUM
+)
+
 type app struct {
-	userInput      textarea.Model
-	chatArea       viewport.Model
-	messages       []string
-	viewportWidth  int
-	viewportHeight int
+	size            size
+	userInput       textarea.Model
+	chatArea        viewport.Model
+	messages        []string
+	borderStyle     lipgloss.Style
+	viewportWidth   int
+	viewportHeight  int
+	containerWidth  int
+	containerHeight int
 }
 
 var conn *websocket.Conn
@@ -39,11 +50,11 @@ func initializeApp() app {
 	ta := textarea.New()
 	ta.ShowLineNumbers = false
 	ta.Focus()
-	ta.SetHeight(1)
-	ta.MaxHeight = 2
-	vp := viewport.New(50, 10) // TODO: Is this appropriate?
+	ta.MaxHeight = 1
+	vp := viewport.New(0, 0)
 	vp.SetContent("")
-	return app{userInput: ta, chatArea: vp}
+	style := lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder())
+	return app{userInput: ta, chatArea: vp, borderStyle: style}
 }
 
 func (a app) Init() tea.Cmd {
@@ -62,6 +73,19 @@ func (a app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	if msg, ok := msg.(tea.WindowSizeMsg); ok {
+		switch {
+		case msg.Width < 150 && msg.Height < 100:
+			a.size = TOO_SMALL
+			return a, nil
+		default:
+			a.size = MEDIUM
+			a.containerWidth = 125
+			a.containerHeight = 40
+			a.chatArea.Height = a.containerHeight
+			a.chatArea.Width = a.containerWidth
+			a.userInput.SetWidth(a.containerWidth)
+			a.userInput.SetHeight(1)
+		}
 		a.viewportWidth = msg.Width
 		a.viewportHeight = msg.Height
 	}
@@ -79,7 +103,10 @@ func (a app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a app) View() string {
-	return lipgloss.Place(a.viewportWidth, a.viewportHeight, lipgloss.Center, lipgloss.Center, lipgloss.JoinVertical(lipgloss.Left, a.chatArea.View(), a.userInput.View()))
+	if a.size == TOO_SMALL {
+		return "Your terminal is too small to render this app. Please increase the terminal size."
+	}
+	return lipgloss.Place(a.viewportWidth, a.viewportHeight, lipgloss.Center, lipgloss.Center, a.borderStyle.Render(lipgloss.JoinVertical(lipgloss.Left, a.chatArea.View(), a.userInput.View())))
 }
 
 func sendRequest(request string) tea.Msg {
